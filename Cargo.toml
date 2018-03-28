@@ -1,0 +1,7 @@
+[package]
+name = "aitios-spatial"
+version = "0.1.0"
+authors = ["krachzack <hello@phstadler.com>"]
+
+[dependencies]
+aitios-geom = { git = "https://github.com/krachzack/aitios-geom.git" }
