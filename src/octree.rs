@@ -30,10 +30,9 @@ impl<T> FromIterator<T> for Octree<T>
         where I: IntoIterator<Item = T>
     {
         let own_data : Vec<T> = entities.into_iter().collect();
-        let own_bounds = Aabb::union(
-            own_data.iter()
+        let own_bounds : Aabb = own_data.iter()
                 .map(|e| e.bounds())
-        );
+                .collect();
 
         let min_node_volume = 0.1 * (own_bounds.max.x - own_bounds.min.x);
         Octree::build_from_vec_with_bounds(own_data, own_bounds, min_node_volume)
