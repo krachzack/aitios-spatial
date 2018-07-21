@@ -1,21 +1,23 @@
-use geom::{Aabb, Vector3, Bounds, IntersectRay};
-use geom::prelude::*;
 use super::octants::octants;
-use std::mem;
+use geom::prelude::*;
+use geom::{Aabb, Bounds, IntersectRay, Vector3};
 use std::iter::FromIterator;
+use std::mem;
 
 /// Spatial data structure for accelerated ray intersection tests
 #[derive(Debug)]
 pub struct Octree<T>
-    where T: Bounds + IntersectRay
+where
+    T: Bounds + IntersectRay,
 {
     bounds: Aabb,
     data: Vec<T>,
-    children: [Option<Box<Octree<T>>>; 8]
+    children: [Option<Box<Octree<T>>>; 8],
 }
 
-impl<T : Bounds + IntersectRay> Bounds for Octree<T>
-    where T : Bounds
+impl<T: Bounds + IntersectRay> Bounds for Octree<T>
+where
+    T: Bounds,
 {
     fn bounds(&self) -> Aabb {
         self.bounds
@@ -23,16 +25,16 @@ impl<T : Bounds + IntersectRay> Bounds for Octree<T>
 }
 
 impl<T> FromIterator<T> for Octree<T>
-    where T : Bounds + IntersectRay
+where
+    T: Bounds + IntersectRay,
 {
     /// Builds an octree from a given draining iterator over something Spatial
     fn from_iter<I>(entities: I) -> Octree<T>
-        where I: IntoIterator<Item = T>
+    where
+        I: IntoIterator<Item = T>,
     {
-        let own_data : Vec<T> = entities.into_iter().collect();
-        let own_bounds : Aabb = own_data.iter()
-                .map(|e| e.bounds())
-                .collect();
+        let own_data: Vec<T> = entities.into_iter().collect();
+        let own_bounds: Aabb = own_data.iter().map(|e| e.bounds()).collect();
 
         let min_node_volume = 0.1 * (own_bounds.max.x - own_bounds.min.x);
         Octree::build_from_vec_with_bounds(own_data, own_bounds, min_node_volume)
@@ -40,9 +42,14 @@ impl<T> FromIterator<T> for Octree<T>
 }
 
 impl<T> IntersectRay for Octree<T>
-    where T : Bounds + IntersectRay
+where
+    T: Bounds + IntersectRay,
 {
-    fn ray_intersection_parameter(&self, ray_origin: Vector3<f32>, ray_direction: Vector3<f32>) -> Option<f32> {
+    fn ray_intersection_parameter(
+        &self,
+        ray_origin: Vector3<f32>,
+        ray_direction: Vector3<f32>,
+    ) -> Option<f32> {
         let mut t_min = None;
 
         if !self.bounds.intersects_ray(ray_origin, ray_direction) {
@@ -52,8 +59,12 @@ impl<T> IntersectRay for Octree<T>
         for data in &self.data {
             if let Some(t) = data.ray_intersection_parameter(ray_origin, ray_direction) {
                 t_min = Some(match t_min {
-                    Some(t_min) => if t < t_min { t } else { t_min },
-                    None => t
+                    Some(t_min) => if t < t_min {
+                        t
+                    } else {
+                        t_min
+                    },
+                    None => t,
                 });
             }
         }
@@ -62,8 +73,12 @@ impl<T> IntersectRay for Octree<T>
             if let &Some(ref child) = child {
                 if let Some(t) = child.ray_intersection_parameter(ray_origin, ray_direction) {
                     t_min = Some(match t_min {
-                        Some(t_min) => if t < t_min { t } else { t_min },
-                        None => t
+                        Some(t_min) => if t < t_min {
+                            t
+                        } else {
+                            t_min
+                        },
+                        None => t,
                     });
                 }
             }
@@ -74,7 +89,8 @@ impl<T> IntersectRay for Octree<T>
 }
 
 impl<T> Octree<T>
-    where T : Bounds + IntersectRay
+where
+    T: Bounds + IntersectRay,
 {
     /// Builds a new octree with the given bounds by taking ownership of the given vector
     /// and splitting it up, until splitting would not accelerate tests any more.
@@ -83,20 +99,32 @@ impl<T> Octree<T>
     /// given minimum node volume or when the child nodes would not have less children.
     ///
     /// Instead of splitting or duplicating the elements that would belong to multiple octants, they
-    /// get stored at higher levels, so they do not require to be implement `Copy`.
-    fn build_from_vec_with_bounds(mut own_data: Vec<T>, own_bounds: Aabb, min_node_volume: f32) -> Octree<T> {
-        assert!(min_node_volume > 0.0, "When building octree, minimum node volume has to be > 0");
+    /// get stored at higher levels, so they do not require to be implement `Copy`. In other words,
+    /// contained objects are not split but instead stored in the smallest octree node that completely
+    /// encloses them. This technique leads to unnecessary nodes but does not require splitting.
+    fn build_from_vec_with_bounds(
+        mut own_data: Vec<T>,
+        own_bounds: Aabb,
+        min_node_volume: f32,
+    ) -> Octree<T> {
+        assert!(
+            min_node_volume > 0.0,
+            "When building octree, minimum node volume has to be > 0"
+        );
 
-        let mut children = [
-            None, None, None, None,
-            None, None, None, None
-        ];
+        let mut children = [None, None, None, None, None, None, None, None];
 
         // Continue subdividing as long as splitting makes sense and the octants are larger than 0.1 cubic units
         if own_data.len() > 1 && own_bounds.volume() >= min_node_volume {
-            let mut child_data : [Vec<T>; 8] = [
-                Vec::new(), Vec::new(), Vec::new(), Vec::new(),
-                Vec::new(), Vec::new(), Vec::new(), Vec::new()
+            let mut child_data: [Vec<T>; 8] = [
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
             ];
             let mut child_octants = octants(&own_bounds);
 
@@ -127,16 +155,18 @@ impl<T> Octree<T>
 
             for i in 0..children.len() {
                 if child_data[i].len() > 0 {
-                    children[i] = Some(
-                        Box::new(
-                            Self::build_from_vec_with_bounds(
-                                // Move values out of arrays and replace them with unit values
-                                mem::replace(&mut child_data[i], vec![]),
-                                mem::replace(&mut child_octants[i], Aabb { min: Vector3::zero(), max: Vector3::zero() }),
-                                min_node_volume
-                            )
-                        )
-                    )
+                    children[i] = Some(Box::new(Self::build_from_vec_with_bounds(
+                        // Move values out of arrays and replace them with unit values
+                        mem::replace(&mut child_data[i], vec![]),
+                        mem::replace(
+                            &mut child_octants[i],
+                            Aabb {
+                                min: Vector3::zero(),
+                                max: Vector3::zero(),
+                            },
+                        ),
+                        min_node_volume,
+                    )))
                 }
             }
         }
@@ -144,7 +174,7 @@ impl<T> Octree<T>
         Octree {
             bounds: own_bounds,
             data: own_data,
-            children
+            children,
         }
     }
 
@@ -152,9 +182,14 @@ impl<T> Octree<T>
 }
 
 impl<T> Octree<T>
-    where T : Bounds + IntersectRay
+where
+    T: Bounds + IntersectRay,
 {
-    pub fn ray_intersection_target_and_parameter(&self, ray_origin: Vector3<f32>, ray_direction: Vector3<f32>) -> Option<(&T, f32)> {
+    pub fn ray_intersection_target_and_parameter(
+        &self,
+        ray_origin: Vector3<f32>,
+        ray_direction: Vector3<f32>,
+    ) -> Option<(&T, f32)> {
         let mut t_min = None;
 
         if !self.bounds.intersects_ray(ray_origin, ray_direction) {
@@ -179,10 +214,16 @@ impl<T> Octree<T>
         // Then, try children
         for child in &self.children {
             if let &Some(ref child) = child {
-                if let Some((data, t)) = child.ray_intersection_target_and_parameter(ray_origin, ray_direction) {
+                if let Some((data, t)) =
+                    child.ray_intersection_target_and_parameter(ray_origin, ray_direction)
+                {
                     t_min = Some(match t_min {
-                        Some((min_data, t_min)) => if t < t_min { (data, t) } else { (min_data, t_min) },
-                        None => (data, t)
+                        Some((min_data, t_min)) => if t < t_min {
+                            (data, t)
+                        } else {
+                            (min_data, t_min)
+                        },
+                        None => (data, t),
                     });
                 }
             }
@@ -192,7 +233,12 @@ impl<T> Octree<T>
     }
 
     /// Like a ray intersection but with limited range for approximating parabolas
-    pub fn line_segment_intersection_target_and_parameter(&self, origin: Vector3<f32>, direction: Vector3<f32>, range: f32) -> Option<(&T, f32)> {
+    pub fn line_segment_intersection_target_and_parameter(
+        &self,
+        origin: Vector3<f32>,
+        direction: Vector3<f32>,
+        range: f32,
+    ) -> Option<(&T, f32)> {
         let mut t_min = None;
 
         let bounds_intersection_param = self.bounds.ray_intersection_parameter(origin, direction);
@@ -226,10 +272,16 @@ impl<T> Octree<T>
 
         for child in &self.children {
             if let &Some(ref child) = child {
-                if let Some((data, t)) = child.line_segment_intersection_target_and_parameter(origin, direction, range) {
+                if let Some((data, t)) =
+                    child.line_segment_intersection_target_and_parameter(origin, direction, range)
+                {
                     t_min = Some(match t_min {
-                        Some((min_data, t_min)) => if t < t_min { (data, t) } else { (min_data, t_min) },
-                        None => (data, t)
+                        Some((min_data, t_min)) => if t < t_min {
+                            (data, t)
+                        } else {
+                            (min_data, t_min)
+                        },
+                        None => (data, t),
                     });
                 }
             }
@@ -240,11 +292,14 @@ impl<T> Octree<T>
 }
 
 impl<T> Octree<T>
-    where T : Bounds + IntersectRay
+where
+    T: Bounds + IntersectRay,
 {
     #[cfg(test)]
     fn node_count(&self) -> usize {
-        1 + self.children.iter()
+        1 + self
+            .children
+            .iter()
             .filter_map(|c| c.as_ref().map(|c| c.node_count()))
             .sum::<usize>()
     }
@@ -252,7 +307,9 @@ impl<T> Octree<T>
     #[cfg(test)]
     fn entity_count(&self) -> usize {
         let own_len = self.data.len();
-        let child_len : usize = self.children.iter()
+        let child_len: usize = self
+            .children
+            .iter()
             .filter_map(|c| c.as_ref().map(|c| c.entity_count()))
             .sum();
 
@@ -261,10 +318,12 @@ impl<T> Octree<T>
 
     #[cfg(test)]
     fn depth(&self) -> usize {
-        1 + self.children.iter()
+        1 + self
+            .children
+            .iter()
             .map(|c| match c {
                 &Some(ref c) => c.depth(),
-                _ => 0
+                _ => 0,
             })
             .max()
             .unwrap_or(0)
@@ -279,12 +338,12 @@ mod test {
     fn make_example_aabb_tree() -> Octree<Aabb> {
         let whole_world = Aabb {
             min: Vector3::new(-10.0, -10.0, -10.0),
-            max: Vector3::new(10.0, 10.0, 10.0)
+            max: Vector3::new(10.0, 10.0, 10.0),
         };
 
         let around_origin = Aabb {
             min: Vector3::new(-0.1, -0.1, -0.1),
-            max: Vector3::new(0.1, 0.1, 0.1)
+            max: Vector3::new(0.1, 0.1, 0.1),
         };
 
         let left_top_front1 = Aabb {
@@ -307,14 +366,15 @@ mod test {
             around_origin,
             left_top_front1,
             left_top_front2,
-            left_top_front3
-        ].into_iter().collect()
+            left_top_front3,
+        ].into_iter()
+            .collect()
     }
 
     fn make_example_aabb_tree_nonoverlapping() -> Octree<Aabb> {
         let around_origin = Aabb {
             min: Vector3::new(-0.1, -0.1, -0.1),
-            max: Vector3::new(0.1, 0.1, 0.1)
+            max: Vector3::new(0.1, 0.1, 0.1),
         };
 
         let left_top_front1 = Aabb {
@@ -336,8 +396,9 @@ mod test {
             around_origin,
             left_top_front1,
             left_top_front2,
-            left_top_front3
-        ].into_iter().collect()
+            left_top_front3,
+        ].into_iter()
+            .collect()
     }
 
     #[test]
@@ -349,11 +410,19 @@ mod test {
         assert_eq!(tree.node_count(), 2);
 
         assert!(
-            tree.data.len() == 2 &&
-            tree.data.iter().any(|e| e.min.x == -10.0 && e.min.y == -10.0 && e.min.z == -10.0 &&
-                                     e.max.x == 10.0 && e.max.y == 10.0 && e.max.z == 10.0) &&
-            tree.data.iter().any(|e| e.min.x == -0.1 && e.min.y == -0.1 && e.min.z == -0.1 &&
-                                     e.max.x == 0.1 && e.max.y == 0.1 && e.max.z == 0.1),
+            tree.data.len() == 2
+                && tree.data.iter().any(|e| e.min.x == -10.0
+                    && e.min.y == -10.0
+                    && e.min.z == -10.0
+                    && e.max.x == 10.0
+                    && e.max.y == 10.0
+                    && e.max.z == 10.0)
+                && tree.data.iter().any(|e| e.min.x == -0.1
+                    && e.min.y == -0.1
+                    && e.min.z == -0.1
+                    && e.max.x == 0.1
+                    && e.max.y == 0.1
+                    && e.max.z == 0.1),
             "Root node should have whole_world and around_origin, but had data {:?}",
             tree.data.iter()
         );
@@ -376,14 +445,26 @@ mod test {
     fn test_line_segment_intersection() {
         let tree = make_example_aabb_tree_nonoverlapping();
 
-        let intersection = tree.line_segment_intersection_target_and_parameter(Vector3::new(0.0, 10.0, 0.0), Vector3::new(0.0, -1.0, 0.0), 10.0);
+        let intersection = tree.line_segment_intersection_target_and_parameter(
+            Vector3::new(0.0, 10.0, 0.0),
+            Vector3::new(0.0, -1.0, 0.0),
+            10.0,
+        );
 
         assert!(intersection.is_some());
         if let Some((ref target, ref parameter)) = intersection {
-            assert_eq!(*parameter, 9.9, "Expected to hit the AABB centered around the origin, instead hit {:?}", target);
+            assert_eq!(
+                *parameter, 9.9,
+                "Expected to hit the AABB centered around the origin, instead hit {:?}",
+                target
+            );
         }
 
-        let intersection = tree.line_segment_intersection_target_and_parameter(Vector3::new(0.0, 10.0, 0.0), Vector3::new(0.0, -1.0, 0.0), 9.8);
+        let intersection = tree.line_segment_intersection_target_and_parameter(
+            Vector3::new(0.0, 10.0, 0.0),
+            Vector3::new(0.0, -1.0, 0.0),
+            9.8,
+        );
         assert!(intersection.is_none());
     }
 }
